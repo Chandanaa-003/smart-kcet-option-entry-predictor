@@ -4,249 +4,90 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KCET Saathi — Option Entry Helper</title>
-
-  <!--
-    WHAT THIS FILE DOES:
-    This is the main HTML page. It defines the layout and structure
-    of the app. It does NOT contain any logic — that lives in the JS files.
-
-    LAYOUT:
-    ┌──────────┬─────────────────────────────┐
-    │          │   TOP BAR (navbar)          │
-    │ SIDEBAR  ├─────────────────────────────┤
-    │  (form)  │   MAIN AREA (results/chat)  │
-    │          │                             │
-    └──────────┴─────────────────────────────┘
-  -->
-
-  <!-- Google Fonts — Syne for headings, Manrope for body text -->
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
-  <!-- Chart.js for trend line charts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-
-  <!-- Our stylesheet -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f1ec;padding:24px}
+    .auth-card{width:min(420px,100%);background:#fff;border:1px solid #e2dbd0;border-radius:16px;padding:32px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+    .auth-logo{text-align:center;font:800 1.5rem Syne,sans-serif;margin-bottom:8px}.auth-logo strong{color:#d4a017}
+    .auth-subtitle{text-align:center;color:#6b5e4a;margin-bottom:24px}
+    .auth-tabs{display:flex;gap:8px;margin-bottom:20px}.auth-tab{flex:1;padding:10px;border:1px solid #e2dbd0;background:#f0ece5;border-radius:8px;cursor:pointer;font-weight:700}.auth-tab.active{background:#d94f2e;color:#fff;border-color:#d94f2e}
+    .auth-field{margin-bottom:14px}.auth-field label{display:block;color:#6b5e4a;margin-bottom:6px}.auth-field input{background:#fff;color:#1a1208;border:1px solid #d8d0c5}
+    .auth-submit{width:100%;padding:12px;border:0;border-radius:9px;background:#d94f2e;color:#fff;font-weight:700;cursor:pointer}.auth-submit:disabled{opacity:.6;cursor:not-allowed}
+    .auth-message{min-height:22px;margin:12px 0;text-align:center;font-size:.82rem}.auth-message.error{color:#b42318}.auth-message.success{color:#1e6b45}
+    .auth-user{display:flex;align-items:center;gap:10px;margin-left:auto}.auth-email{color:#d1d5db;font-size:.72rem}.logout-btn{background:#3a3a3c;color:#fff;border:0;border-radius:7px;padding:6px 10px;cursor:pointer}
+  </style>
 </head>
 <body>
-
-  <!-- ══════════════════════════════════
-       TOP NAVBAR
-  ══════════════════════════════════ -->
-  <nav class="navbar">
-    <div class="nav-brand">
-      <span class="brand-icon">🎓</span>
-      <span class="brand-name">KCET <strong>Saathi</strong></span>
+  <section id="authScreen">
+    <div class="auth-card">
+      <div class="auth-logo">🎓 KCET <strong>Saathi</strong></div>
+      <p class="auth-subtitle">Sign in to use your KCET college predictor.</p>
+      <div class="auth-tabs"><button id="loginTab" class="auth-tab active" type="button">Login</button><button id="registerTab" class="auth-tab" type="button">Register</button></div>
+      <form id="authForm">
+        <div class="auth-field"><label for="authEmail">Email</label><input id="authEmail" type="email" required autocomplete="email" placeholder="you@example.com" /></div>
+        <div class="auth-field"><label for="authPassword">Password</label><input id="authPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="Minimum 6 characters" /></div>
+        <div id="authMessage" class="auth-message"></div>
+        <button id="authSubmit" class="auth-submit" type="submit">Login</button>
+      </form>
     </div>
-    <div class="nav-tabs">
-      <button class="nav-tab active" id="tab-predictor" onclick="switchTab('predictor')">
-        🎯 College Predictor
-      </button>
-      <button class="nav-tab" id="tab-priority" onclick="switchTab('priority')">
-        📋 Priority List
-      </button>
-      <button class="nav-tab" id="tab-ai" onclick="switchTab('ai')">
-        🤖 AI Counsellor
-      </button>
+  </section>
+
+  <div id="appContent" style="display:none">
+    <nav class="navbar">
+      <div class="nav-brand"><span class="brand-icon">🎓</span><span class="brand-name">KCET <strong>Saathi</strong></span></div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" id="tab-predictor" onclick="switchTab('predictor')">🎯 College Predictor</button>
+        <button class="nav-tab" id="tab-priority" onclick="switchTab('priority')">📋 Priority List</button>
+        <button class="nav-tab" id="tab-ai" onclick="switchTab('ai')">🤖 AI Counsellor</button>
+      </div>
+      <div class="auth-user"><span class="auth-email" id="userEmail"></span><button class="logout-btn" id="logoutBtn">Logout</button></div>
+    </nav>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-header"><h2>Find Your Colleges</h2><p>Enter your rank and we'll show exactly which colleges you can get.</p></div>
+        <div class="field"><label for="rank">Your KCET Rank <span class="req">*</span></label><input type="number" id="rank" placeholder="e.g. 8500" min="1" max="250000" /></div>
+        <div class="field"><label for="cat">Category <span class="req">*</span></label><div class="select-wrap"><select id="cat"><option value="">Select your category</option><option value="GM">GM — General Merit</option><option value="1">1 — Category 1</option><option value="2A">2A — Category 2A (OBC)</option><option value="2B">2B — Category 2B (OBC)</option><option value="3A">3A — Category 3A (OBC)</option><option value="3B">3B — Category 3B (OBC)</option><option value="SC">SC — Scheduled Caste</option><option value="ST">ST — Scheduled Tribe</option></select></div></div>
+        <div class="field"><label for="quota">Quota</label><div class="select-wrap"><select id="quota"><option value="General">General</option><option value="Kannada">Kannada Medium</option><option value="Rural">Rural</option></select></div></div>
+        <div class="field"><label for="region">Region</label><div class="select-wrap"><select id="region"><option value="General">General</option><option value="Hyderabad-Karnataka">Hyderabad-Karnataka</option></select></div></div>
+        <div class="field branch-field"><div class="branch-top"><label>Preferred Branches</label><div class="branch-btns"><button class="chip-btn" onclick="App.pickPopular()">⚡ CS/IT/AI</button><button class="chip-btn" onclick="App.pickAll()">All</button><button class="chip-btn" onclick="App.pickNone()">Clear</button></div></div><input type="text" id="branchSearch" placeholder="Search branch…" /><div class="tag-cloud" id="tagCloud"></div></div>
+        <button class="search-btn" onclick="App.doSearch()">🔍 Find My Colleges</button>
+        <div class="sidebar-stats"><div class="stat"><span class="stat-n">460+</span><span class="stat-l">Colleges</span></div><div class="stat"><span class="stat-n">146</span><span class="stat-l">Branches</span></div><div class="stat"><span class="stat-n">3 Yrs</span><span class="stat-l">Data</span></div></div>
+      </aside>
+      <main class="main">
+        <div class="panel active" id="panel-predictor"><div class="welcome" id="welcomeMsg"><div class="welcome-icon">🎯</div><h3>Ready to find your colleges?</h3><p>Fill in your rank and category on the left, then click <strong>Find My Colleges</strong>.</p><div class="welcome-tips"><div class="tip">✅ Safe colleges are shown first</div><div class="tip">📈 Click any card to see the cutoff trend chart</div><div class="tip">⬇️ Export the list to use while filling KEA portal</div></div></div><div id="resultArea"></div></div>
+        <div class="panel" id="panel-priority"><div class="panel-hero"><h2>📋 Your Option Entry Priority List</h2><p>This list shows the recommended order to fill colleges in the KEA portal. Search first to generate it.</p></div><div id="priorityArea"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No list yet</div><p>Search in the College Predictor tab first.</p></div></div></div>
+        <div class="panel" id="panel-ai"><div class="panel-hero"><h2>🤖 AI Counsellor</h2><p>Ask anything about KCET option entry strategy. The AI knows your rank and top colleges.</p></div><div class="quick-chips"><span class="chips-label">Quick questions:</span><button class="qchip" onclick="AI.sendQ(this)">How many options should I fill?</button><button class="qchip" onclick="AI.sendQ(this)">What is HK quota?</button><button class="qchip" onclick="AI.sendQ(this)">Should I add reach colleges?</button><button class="qchip" onclick="AI.sendQ(this)">Explain Rural quota</button><button class="qchip" onclick="AI.sendQ(this)">Best CS colleges in Bangalore?</button></div><div class="chat-box"><div class="chat-header"><div class="chat-avatar">🎓</div><div><div class="chat-name">Saathi AI Counsellor</div><div class="chat-status"><span class="dot"></span> Powered by Claude</div></div></div><div class="chat-messages" id="chatMessages"><div class="message ai"><div class="msg-avatar">🎓</div><div class="msg-bubble">Namaskara! 👋 I'm your KCET option entry counsellor.<br><br>Tell me your rank and category, or ask me anything about how to fill the KEA option entry form correctly!</div></div></div><div class="chat-input-row"><textarea id="chatInput" placeholder="Ask about KCET option entry…" rows="1"></textarea><button id="sendBtn" onclick="AI.sendMsg()">➤</button></div></div></div>
+      </main>
     </div>
-    <div class="nav-badge">2023 – 2025 Data</div>
-  </nav>
+    <footer class="footer">KCET Saathi &bull; Data from KEA allotment rounds 2023–2025 &bull; Always verify at <a href="https://kea.kar.nic.in" target="_blank">kea.kar.nic.in</a></footer>
+  </div>
 
-  <!-- ══════════════════════════════════
-       PAGE LAYOUT  (sidebar + main)
-  ══════════════════════════════════ -->
-  <div class="layout">
-
-    <!-- ── LEFT SIDEBAR — search form ── -->
-    <aside class="sidebar">
-
-      <div class="sidebar-header">
-        <h2>Find Your Colleges</h2>
-        <p>Enter your rank and we'll show exactly which colleges you can get.</p>
-      </div>
-
-      <!-- Rank input -->
-      <div class="field">
-        <label for="rank">Your KCET Rank <span class="req">*</span></label>
-        <input type="number" id="rank" placeholder="e.g. 8500" min="1" max="250000" />
-      </div>
-
-      <!-- Category dropdown -->
-      <div class="field">
-        <label for="cat">Category <span class="req">*</span></label>
-        <div class="select-wrap">
-          <select id="cat">
-            <option value="">Select your category</option>
-            <option value="GM">GM — General Merit</option>
-            <option value="1">1 — Category 1</option>
-            <option value="2A">2A — Category 2A (OBC)</option>
-            <option value="2B">2B — Category 2B (OBC)</option>
-            <option value="3A">3A — Category 3A (OBC)</option>
-            <option value="3B">3B — Category 3B (OBC)</option>
-            <option value="SC">SC — Scheduled Caste</option>
-            <option value="ST">ST — Scheduled Tribe</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Quota dropdown -->
-      <div class="field">
-        <label for="quota">Quota</label>
-        <div class="select-wrap">
-          <select id="quota">
-            <option value="General">General</option>
-            <option value="Kannada">Kannada Medium</option>
-            <option value="Rural">Rural</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Region dropdown -->
-      <div class="field">
-        <label for="region">Region</label>
-        <div class="select-wrap">
-          <select id="region">
-            <option value="General">General</option>
-            <option value="Hyderabad-Karnataka">Hyderabad-Karnataka</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Branch filter -->
-      <div class="field branch-field">
-        <div class="branch-top">
-          <label>Preferred Branches</label>
-          <div class="branch-btns">
-            <button class="chip-btn" onclick="App.pickPopular()">⚡ CS/IT/AI</button>
-            <button class="chip-btn" onclick="App.pickAll()">All</button>
-            <button class="chip-btn" onclick="App.pickNone()">Clear</button>
-          </div>
-        </div>
-        <input type="text" id="branchSearch" placeholder="Search branch…" />
-        <div class="tag-cloud" id="tagCloud"></div>
-      </div>
-
-      <!-- Search button -->
-      <button class="search-btn" onclick="App.doSearch()">
-        🔍 Find My Colleges
-      </button>
-
-      <!-- Stats at the bottom of sidebar -->
-      <div class="sidebar-stats">
-        <div class="stat"><span class="stat-n">460+</span><span class="stat-l">Colleges</span></div>
-        <div class="stat"><span class="stat-n">146</span><span class="stat-l">Branches</span></div>
-        <div class="stat"><span class="stat-n">3 Yrs</span><span class="stat-l">Data</span></div>
-      </div>
-
-    </aside>
-
-    <!-- ── MAIN CONTENT AREA ── -->
-    <main class="main">
-
-      <!-- PANEL 1 — College Predictor Results -->
-      <div class="panel active" id="panel-predictor">
-
-        <!-- shown before first search -->
-        <div class="welcome" id="welcomeMsg">
-          <div class="welcome-icon">🎯</div>
-          <h3>Ready to find your colleges?</h3>
-          <p>Fill in your rank and category on the left, then click <strong>Find My Colleges</strong>.</p>
-          <div class="welcome-tips">
-            <div class="tip">✅ Safe colleges are shown first</div>
-            <div class="tip">📈 Click any card to see the cutoff trend chart</div>
-            <div class="tip">⬇️ Export the list to use while filling KEA portal</div>
-          </div>
-        </div>
-
-        <!-- results injected here by predictor.js -->
-        <div id="resultArea"></div>
-
-      </div>
-
-      <!-- PANEL 2 — Priority List -->
-      <div class="panel" id="panel-priority">
-        <div class="panel-hero">
-          <h2>📋 Your Option Entry Priority List</h2>
-          <p>This list shows the recommended order to fill colleges in the KEA portal. Search first to generate it.</p>
-        </div>
-        <!-- priority list injected here by app.js -->
-        <div id="priorityArea">
-          <div class="empty-state">
-            <div class="empty-icon">📋</div>
-            <div class="empty-title">No list yet</div>
-            <p>Search in the College Predictor tab first.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- PANEL 3 — AI Counsellor -->
-      <div class="panel" id="panel-ai">
-        <div class="panel-hero">
-          <h2>🤖 AI Counsellor</h2>
-          <p>Ask anything about KCET option entry strategy. The AI knows your rank and top colleges.</p>
-        </div>
-
-
-
-        <!-- quick question chips -->
-        <div class="quick-chips">
-          <span class="chips-label">Quick questions:</span>
-          <button class="qchip" onclick="AI.sendQ(this)">How many options should I fill?</button>
-          <button class="qchip" onclick="AI.sendQ(this)">What is HK quota?</button>
-          <button class="qchip" onclick="AI.sendQ(this)">Should I add reach colleges?</button>
-          <button class="qchip" onclick="AI.sendQ(this)">Explain Rural quota</button>
-          <button class="qchip" onclick="AI.sendQ(this)">Best CS colleges in Bangalore?</button>
-        </div>
-
-        <!-- chat window -->
-        <div class="chat-box">
-          <div class="chat-header">
-            <div class="chat-avatar">🎓</div>
-            <div>
-              <div class="chat-name">Saathi AI Counsellor</div>
-              <div class="chat-status"><span class="dot"></span> Powered by Claude</div>
-            </div>
-          </div>
-
-          <div class="chat-messages" id="chatMessages">
-            <!-- first message from AI -->
-            <div class="message ai">
-              <div class="msg-avatar">🎓</div>
-              <div class="msg-bubble">
-                Namaskara! 👋 I'm your KCET option entry counsellor.<br><br>
-                Tell me your rank and category, or ask me anything about
-                how to fill the KEA option entry form correctly!
-              </div>
-            </div>
-          </div>
-
-          <div class="chat-input-row">
-            <textarea id="chatInput" placeholder="Ask about KCET option entry…" rows="1"></textarea>
-            <button id="sendBtn" onclick="AI.sendMsg()">➤</button>
-          </div>
-        </div>
-
-      </div>
-
-    </main>
-  </div><!-- /.layout -->
-
-  <footer class="footer">
-    KCET Saathi &bull; Data from KEA allotment rounds 2023–2025 &bull;
-    Always verify at <a href="https://kea.kar.nic.in" target="_blank">kea.kar.nic.in</a>
-  </footer>
-
-  <!--
-    JS FILES — loaded in this exact order (order matters!)
-    1. data.js    — loads JSON files, sets window.KCET_DATA and window.COURSES
-    2. predictor.js — search, scoring, rendering results
-    3. ai.js      — Claude API chat
-    4. app.js     — wires everything together, called last
-  -->
+  <script>
+    window.SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    window.SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  </script>
+  <script src="js/auth.js"></script>
   <script src="js/data.js"></script>
   <script src="js/predictor.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/app.js"></script>
-
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      let mode = 'login';
+      const form = document.getElementById('authForm');
+      const submit = document.getElementById('authSubmit');
+      const loginTab = document.getElementById('loginTab');
+      const registerTab = document.getElementById('registerTab');
+      const logout = document.getElementById('logoutBtn');
+      const setMode = (next) => { mode = next; loginTab.classList.toggle('active', mode === 'login'); registerTab.classList.toggle('active', mode === 'register'); submit.textContent = mode === 'login' ? 'Login' : 'Create account'; document.getElementById('authPassword').autocomplete = mode === 'login' ? 'current-password' : 'new-password'; Auth.showAuthMessage(''); };
+      loginTab.onclick = () => setMode('login'); registerTab.onclick = () => setMode('register');
+      form.onsubmit = async (e) => { e.preventDefault(); submit.disabled = true; Auth.showAuthMessage(''); try { const email = document.getElementById('authEmail').value.trim(); const password = document.getElementById('authPassword').value; if (mode === 'login') { await Auth.loginUser(email, password); } else { const data = await Auth.registerUser(email, password); Auth.showAuthMessage(data.session ? 'Account created and logged in.' : 'Account created. Check your email to confirm your account.'); } } catch (err) { Auth.showAuthMessage(err.message || 'Authentication failed.', true); } finally { submit.disabled = false; } };
+      logout.onclick = async () => { try { await Auth.logoutUser(); } catch (err) { Auth.showAuthMessage(err.message || 'Logout failed.', true); } };
+    });
+  </script>
 </body>
 </html>
