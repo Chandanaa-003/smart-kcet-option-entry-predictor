@@ -1,9 +1,10 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import httpx
+from auth import get_current_user
 
 load_dotenv()
 
@@ -13,8 +14,16 @@ class ChatRequest(BaseModel):
     system: str
     messages: list
 
+@app.get("/api/auth/me")
+async def get_me(user=Depends(get_current_user)):
+    return {
+        "user_id": user.get("sub"),
+        "email": user.get("email"),
+        "role": user.get("role"),
+    }
+
 @app.post("/api/chat")
-async def chat_with_claude(request: ChatRequest):
+async def chat_with_claude(request: ChatRequest, user=Depends(get_current_user)):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not set on the server")
@@ -29,7 +38,7 @@ async def chat_with_claude(request: ChatRequest):
                     "content-type": "application/json"
                 },
                 json={
-                    "model": "claude-3-opus-20240229", # Using standard available model since sonnet-4 may not be active
+                    "model": "claude-3-opus-20240229",
                     "max_tokens": 350,
                     "system": request.system,
                     "messages": request.messages
@@ -38,20 +47,15 @@ async def chat_with_claude(request: ChatRequest):
             )
             response.raise_for_status()
             data = response.json()
-            
             if "content" not in data or len(data["content"]) == 0:
                 raise HTTPException(status_code=500, detail="Empty response from Claude")
-                
             return {"reply": data["content"][0]["text"]}
-
         except httpx.HTTPStatusError as e:
             error_details = e.response.json()
             raise HTTPException(status_code=e.response.status_code, detail=error_details.get("error", {}).get("message", "Unknown Anthropic Error"))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-# Mount the static directory to serve index.html, css, js, and data.
-# The html=True flag allows it to serve index.html when root / is accessed.
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 if __name__ == "__main__":
